@@ -328,7 +328,7 @@ func runDaemon() int {
 	strategy := os.Getenv("REBOOT_STRATEGY")
 
 	if strategy == "" {
-		strategy = StrategyBestEffort
+		strategy = StrategyReboot
 	}
 
 	// XXX: complain loudly if besteffort is used
