@@ -14,8 +14,8 @@
 
 package lock
 
-// LockClient is a generic interface for a lock
-type LockClient interface {
+// Client is a generic interface for a lock
+type Client interface {
 	Init() error
 	Get() (*Semaphore, error)
 	Set(*Semaphore) error

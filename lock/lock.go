@@ -17,11 +17,11 @@ package lock
 // Lock takes care of locking in generic clients
 type Lock struct {
 	id     string
-	client LockClient
+	client Client
 }
 
 // New returns a new lock with the provided arguments
-func New(id string, client LockClient) (lock *Lock) {
+func New(id string, client Client) (lock *Lock) {
 	return &Lock{id, client}
 }
 
