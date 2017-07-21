@@ -27,7 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/coreos/go-systemd/dbus"
 	"github.com/coreos/go-systemd/login1"
 	"github.com/coreos/pkg/capnslog"
 
@@ -65,14 +64,6 @@ const (
 	// there. Before it reboots, it aquires the lock, and will not reboot until
 	// it does.
 	StrategyEtcdLock = "etcd-lock"
-
-	// StrategyBestEffort is deprecated and will be removed on 09/14/17
-	// https://coreos.com/blog/locksmith-update-strategy-revision
-	// StrategyBestEffort is currently the default strategy. It heuristically
-	// attempts to find a running etcd cluster and connect to it. If it finds
-	// one, it behaves like StrategyEtcdLock, and if it doesn't, it behaves like
-	// StrategyReboot.
-	StrategyBestEffort = "best-effort"
 
 	// StrategyOff causes locksmith to exit without performing any actions
 	StrategyOff = "off"
@@ -169,36 +160,6 @@ func setupLock() (lck *lock.Lock, err error) {
 	return lck, nil
 }
 
-// etcdActive returns true if etcd is not in an inactive state according to systemd.
-func etcdActive() (active bool, name string, err error) {
-	active = false
-	name = ""
-
-	sys, err := dbus.New()
-	if err != nil {
-		return
-	}
-	defer sys.Close()
-
-	for _, service := range etcdServices {
-		prop, err := sys.GetUnitProperty(service, "ActiveState")
-		if err != nil {
-			continue
-		}
-
-		switch prop.Value.Value().(string) {
-		case "inactive":
-			continue
-		default:
-			active = true
-			name = service
-			break
-		}
-	}
-
-	return
-}
-
 type rebooter struct {
 	strategy string
 	lgn      *login1.Conn
@@ -234,24 +195,10 @@ func (r rebooter) reboot() int {
 
 // useLock returns whether locksmith should attempt to take a lock before
 // rebooting or release a lock afterwards, based on the given strategy.
-// If strategy is set to best effort, this will be dependent on whether the
-// local instance of etcd is active. Otherwise, the lock will always be
-// attempted (in the case of strategy = etcd lock) or never be attempted (in
-// the case of strategy = reboot)
+// The lock will always be attempted (in the case of strategy = etcd lock) or
+// never be attempted (in the case of strategy = reboot)
 func useLock(strategy string) (useLock bool, err error) {
 	switch strategy {
-	case StrategyBestEffort:
-		active, name, err := etcdActive()
-		if err != nil {
-			return false, err
-		}
-		if active {
-			dlog.Infof("%s is active", name)
-			useLock = true
-		} else {
-			dlog.Infof("%v are inactive", etcdServices)
-			useLock = false
-		}
 	case StrategyEtcdLock:
 		useLock = true
 	case StrategyReboot:
@@ -329,13 +276,6 @@ func runDaemon() int {
 
 	if strategy == "" {
 		strategy = StrategyReboot
-	}
-
-	// XXX: complain loudly if besteffort is used
-	if strategy == StrategyBestEffort {
-		dlog.Errorf("Reboot strategy %q is deprecated and will be removed in the future.", strategy)
-		dlog.Errorf("Please explicitly set the reboot strategy to one of %v", []string{StrategyOff, StrategyReboot, StrategyEtcdLock})
-		dlog.Error("See https://coreos.com/os/docs/latest/update-strategies.html for details on configuring reboot strategies.")
 	}
 
 	if strategy == StrategyOff {
